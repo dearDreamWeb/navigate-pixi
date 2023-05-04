@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import * as PIXI from 'pixi.js';
-import styles from './index.less';
+import styles from './index.module.less';
 import { createLine, translatePosition, routePlan } from '@/utils';
 
 const WIDTH = 700;
