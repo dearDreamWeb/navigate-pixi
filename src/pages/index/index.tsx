@@ -139,7 +139,7 @@ const Index = () => {
           }),
           color: 0xff4400,
         });
-      }, 100 * index);
+      }, 200 * index);
     });
   };
 

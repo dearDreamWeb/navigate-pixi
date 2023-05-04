@@ -1,3 +1,3 @@
-# 模板
-
-react-ts-vite-template 模板
+# A*自动寻路算法
+使用`pixi.js`+`React`实现的A*自动寻路算法。  
+正在开发中。。。
