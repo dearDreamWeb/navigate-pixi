@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import * as PIXI from 'pixi.js';
 import styles from './index.less';
-import { createLine } from '@/utils';
+import { createLine, translatePosition, routePlan } from '@/utils';
 
 const WIDTH = 700;
 const HEIGHT = 700;
@@ -9,16 +9,47 @@ const GRIDROWS = 25;
 const GRIDWIDTH = WIDTH / GRIDROWS;
 const GRIDHEIGHT = HEIGHT / GRIDROWS;
 
+const obstacleArr = [
+  { x: 10, y: 10 },
+  { x: 6, y: 3 },
+  { x: 6, y: 4 },
+  { x: 6, y: 5 },
+  { x: 6, y: 6 },
+  { x: 6, y: 7 },
+  { x: 8, y: 7 },
+  { x: 8, y: 9 },
+  { x: 8, y: 11 },
+  { x: 15, y: 12 },
+  { x: 15, y: 16 },
+  { x: 15, y: 17 },
+  { x: 15, y: 19 },
+  { x: 15, y: 21 },
+  { x: 15, y: 22 },
+  { x: 15, y: 23 },
+  { x: 15, y: 24 },
+];
+
+let obstacleAll: number[][] = [];
+for (let i = 0; i < GRIDROWS; i++) {
+  obstacleAll.push(new Array(25).fill(0));
+}
+
+obstacleArr.forEach((item) => {
+  obstacleAll[item.y][item.x] = 1;
+});
+console.log(obstacleAll);
+
 const Index = () => {
   const [app, setApp] = useState<PIXI.Application>();
-  const bgContainer = useRef<PIXI.Container>();
+  const bgContainer = useRef<PIXI.Container>(new PIXI.Container());
+  const rectContainer = useRef<PIXI.Container>(new PIXI.Container());
   const [startRect, setStartRect] = useState<{ x: number; y: number }>({
-    x: 28 * 3,
-    y: 28 * 5,
+    x: 3,
+    y: 5,
   });
   const [endRect, setEndRect] = useState<{ x: number; y: number }>({
-    x: 28 * 20,
-    y: 28 * 22,
+    x: 20,
+    y: 22,
   });
 
   useEffect(() => {
@@ -39,10 +70,82 @@ const Index = () => {
       return;
     }
     initLine();
-    createRect({ position: startRect });
-    createRect({ position: endRect, color: 0xe4393c });
+    drawStartEnd();
+    drawRoute();
+    drawObstacleArr();
   }, [app]);
 
+  /**
+   * 绘制起点和终点
+   */
+  const drawStartEnd = () => {
+    createRect({
+      position: translatePosition({
+        width: WIDTH,
+        height: HEIGHT,
+        itemRows: GRIDROWS,
+        rows: startRect.y,
+        columns: startRect.x,
+      }),
+    });
+    createRect({
+      position: translatePosition({
+        width: WIDTH,
+        height: HEIGHT,
+        itemRows: GRIDROWS,
+        rows: endRect.y,
+        columns: endRect.x,
+      }),
+      color: 0xe4393c,
+    });
+  };
+
+  /**
+   * 绘制障碍物
+   */
+  const drawObstacleArr = () => {
+    obstacleArr.forEach((item) => {
+      createRect({
+        position: translatePosition({
+          width: WIDTH,
+          height: HEIGHT,
+          itemRows: GRIDROWS,
+          rows: item.y,
+          columns: item.x,
+        }),
+        color: 0xcccccc,
+      });
+    });
+  };
+
+  /**
+   * 绘制路径
+   */
+  const drawRoute = () => {
+    const routeList = routePlan({
+      start: startRect,
+      end: endRect,
+      obstacleAll,
+    });
+    routeList.forEach((item, index) => {
+      setTimeout(() => {
+        createRect({
+          position: translatePosition({
+            width: WIDTH,
+            height: HEIGHT,
+            itemRows: GRIDROWS,
+            rows: item.y,
+            columns: item.x,
+          }),
+          color: 0xff4400,
+        });
+      }, 100 * index);
+    });
+  };
+
+  /**
+   * 初始化网格
+   */
   const initLine = () => {
     const container = new PIXI.Container();
 
@@ -74,6 +177,10 @@ const Index = () => {
     // );
   };
 
+  /**
+   * 创建格子
+   * @param param0
+   */
   const createRect = ({
     position,
     color = 0x000000,
@@ -91,7 +198,8 @@ const Index = () => {
       GRIDHEIGHT
     );
     rectangle.endFill();
-    app?.stage.addChild(rectangle);
+    rectContainer.current?.addChild(rectangle);
+    app?.stage.addChild(rectContainer.current!);
   };
 
   return (
