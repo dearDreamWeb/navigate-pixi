@@ -32,6 +32,7 @@ interface Position {
 interface RoutePlanProps {
   start: Position;
   end: Position;
+  plan: string;
   centerPosition: Position;
   obstacleAll: BgLayoutItemType[][];
 }
@@ -108,6 +109,7 @@ const nexStep = ({
   end,
   centerPosition,
   obstacleAll,
+  plan,
 }: RoutePlanProps): NexStepReturn[] => {
   const { x: startX, y: startY } = start;
   const { x: endX, y: endY } = end;
@@ -127,7 +129,9 @@ const nexStep = ({
     const { x, y } = direction[key];
     if (
       x < 0 ||
+      x >= 25 ||
       y < 0 ||
+      y >= 25 ||
       obstacleAll[y][x] === BgLayoutItemType.obstacle ||
       obstacleAll[y][x] === BgLayoutItemType.route
     ) {
@@ -136,18 +140,22 @@ const nexStep = ({
 
     let gValue = Math.sqrt(Math.pow(startX - x, 2) + Math.pow(startY - y, 2));
 
-    // 对角线距离
-    let max = Math.max(Math.abs(endX - x), Math.abs(endY - y));
-    let min = Math.min(Math.abs(endX - x), Math.abs(endY - y));
-    let hValue = Math.sqrt(Math.pow(min, 2) + Math.pow(min, 2)) + max - min;
+    let hValue = 0;
 
-    // 曼哈顿距离
-    // let hValue = Math.abs(endX - x) + Math.abs(endY - y);
-
-    // 斜线距离
-    // let hValue = Math.sqrt(
-    //   Math.pow(Math.abs(endX - x), 2) + Math.pow(Math.abs(endY - y), 2)
-    // );
+    if (plan === 'one') {
+      // 对角线距离
+      let max = Math.max(Math.abs(endX - x), Math.abs(endY - y));
+      let min = Math.min(Math.abs(endX - x), Math.abs(endY - y));
+      hValue = Math.sqrt(Math.pow(min, 2) + Math.pow(min, 2)) + max - min;
+    } else if (plan === 'two') {
+      // 曼哈顿距离
+      hValue = Math.abs(endX - x) + Math.abs(endY - y);
+    } else {
+      // 斜线距离
+      hValue = Math.sqrt(
+        Math.pow(Math.abs(endX - x), 2) + Math.pow(Math.abs(endY - y), 2)
+      );
+    }
 
     arr.push({ x, y, gValue, hValue, value: gValue + hValue, type: 'round' });
   }
@@ -184,17 +192,25 @@ export const routePlan = ({
   start,
   end,
   obstacleAll,
+  plan,
 }: Omit<RoutePlanProps, 'centerPosition'>) => {
   let arr: NexStepReturn[][] = [[]];
   const bgLayout = JSON.parse(JSON.stringify(obstacleAll));
   let centerPosition = start;
+
   function loop({
     start,
     end,
     obstacleAll,
     centerPosition,
-  }: RoutePlanProps): NexStepReturn[][] {
-    let nextPositionArr = nexStep({ start, end, centerPosition, obstacleAll });
+  }: Omit<RoutePlanProps, 'plan'>): NexStepReturn[][] {
+    let nextPositionArr = nexStep({
+      start,
+      end,
+      centerPosition,
+      obstacleAll,
+      plan,
+    });
     if (!nextPositionArr.length) {
       alert('不好意思，走不通呀！！！');
       return arr;
@@ -205,6 +221,7 @@ export const routePlan = ({
     if (nextPosition.x === end.x && nextPosition.y === end.y) {
       return arr;
     }
+    console.log(nextPosition, nextPositionArr);
     obstacleAll[nextPosition.y][nextPosition.x] = BgLayoutItemType.route;
     let position = { x: nextPosition.x, y: nextPosition.y };
     arr.push(nextPositionArr);

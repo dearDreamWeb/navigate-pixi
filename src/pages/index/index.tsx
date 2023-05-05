@@ -7,6 +7,7 @@ import {
   routePlan,
   clickPosition,
 } from '@/utils';
+import { Button, Select } from 'antd';
 
 export enum BgLayoutItemType {
   empty = 0,
@@ -19,6 +20,8 @@ export enum BgLayoutItemType {
 
 interface RectGraphics extends PIXI.Graphics {
   rectType: BgLayoutItemType;
+  paramX: number;
+  paramY: number;
 }
 
 const WIDTH = 700;
@@ -55,7 +58,6 @@ for (let i = 0; i < GRIDROWS; i++) {
 obstacleArr.forEach((item) => {
   obstacleAll[item.y][item.x] = 1;
 });
-console.log(obstacleAll);
 
 const Index = () => {
   const [app, setApp] = useState<PIXI.Application>();
@@ -63,9 +65,12 @@ const Index = () => {
   const bgContainer = useRef<PIXI.Container>(new PIXI.Container());
   // 方格容器
   const rectContainer = useRef<PIXI.Container>(new PIXI.Container());
+  // 路径和周围容器
+  const routeRoundContainer = useRef<PIXI.Container>(new PIXI.Container());
   // 二维数组
   const bgLayout = useRef<BgLayoutItemType[][]>(obstacleAll);
   const [isStart, setIsStart] = useState(false);
+  const [selectType, setSelectType] = useState('one');
   const [startRect, setStartRect] = useState<{ x: number; y: number }>({
     x: 3,
     y: 5,
@@ -103,6 +108,7 @@ const Index = () => {
     if (!isStart) {
       return;
     }
+    setIsStart(false);
     drawRoute();
   }, [isStart]);
 
@@ -160,6 +166,7 @@ const Index = () => {
       start: startRect,
       end: endRect,
       obstacleAll: bgLayout.current,
+      plan: selectType,
     });
     console.log(`总共步数：${routeList.length}`);
     let prohibitDraw = [
@@ -195,7 +202,7 @@ const Index = () => {
             bgLayout.current[item.y][item.x] = BgLayoutItemType.round;
           }
         });
-      }, 500 * index);
+      }, 200 * index);
     });
   };
 
@@ -223,6 +230,8 @@ const Index = () => {
     }
     bgContainer.current = container;
     app!.stage.addChild(container);
+
+    // 点击事件生成障碍物，再次点击障碍物将障碍物消掉
     app!.renderer.plugins.interaction.on(
       'pointerdown',
       (event: PIXI.InteractionEvent) => {
@@ -234,12 +243,26 @@ const Index = () => {
           y: position.y,
           x: position.x,
         });
-        createRect({
-          position: { x, y },
-          color: 0xcccccc,
-          type: BgLayoutItemType.obstacle,
-        });
-        bgLayout.current[relativeY][relativeX] = BgLayoutItemType.obstacle;
+
+        const filterArr = rectContainer.current.children.filter(
+          (item) =>
+            (item as RectGraphics).rectType === BgLayoutItemType.obstacle &&
+            Math.floor((item as RectGraphics).paramX / GRIDWIDTH) ===
+              relativeX &&
+            Math.floor((item as RectGraphics).paramY / GRIDHEIGHT) === relativeY
+        );
+
+        if (filterArr.length) {
+          rectContainer.current.removeChild(filterArr[0]);
+          bgLayout.current[relativeY][relativeX] = BgLayoutItemType.empty;
+        } else {
+          createRect({
+            position: { x, y },
+            color: 0xcccccc,
+            type: BgLayoutItemType.obstacle,
+          });
+          bgLayout.current[relativeY][relativeX] = BgLayoutItemType.obstacle;
+        }
       }
     );
   };
@@ -268,21 +291,61 @@ const Index = () => {
       GRIDHEIGHT
     );
     rectangle.endFill();
+    rectangle.paramX = x;
+    rectangle.paramY = y;
     rectangle.rectType = type;
-    rectContainer.current?.addChild(rectangle);
-    app?.stage.addChild(rectContainer.current!);
+    if (type === BgLayoutItemType.route || type === BgLayoutItemType.round) {
+      routeRoundContainer.current.addChild(rectangle);
+      app?.stage.addChild(routeRoundContainer.current!);
+    } else {
+      rectContainer.current?.addChild(rectangle);
+      app?.stage.addChild(rectContainer.current!);
+    }
   };
 
   const playStart = () => {
+    clearRoute();
     setIsStart(true);
+  };
+
+  /**
+   * 清除路径
+   */
+  const clearRoute = () => {
+    routeRoundContainer.current.children.forEach((item) => {
+      bgLayout.current[Math.floor((item as RectGraphics).paramY / GRIDHEIGHT)][
+        Math.floor((item as RectGraphics).paramX / GRIDWIDTH)
+      ] = 0;
+    });
+    routeRoundContainer.current.removeChild(
+      ...routeRoundContainer.current.children
+    );
+    app?.stage.removeChild(routeRoundContainer.current);
+  };
+
+  const handleChange = (value: string) => {
+    setSelectType(value);
   };
 
   return (
     <div className={(styles as any).indexMain}>
       <div>
-        <button onClick={playStart}>开始</button>
+        <div>
+          <Button onClick={playStart}>开始</Button>
+          <Button onClick={clearRoute}>清除路径</Button>
+          <Select
+            defaultValue={selectType}
+            style={{ width: 120 }}
+            onChange={handleChange}
+            options={[
+              { value: 'one', label: '对角线距离' },
+              { value: 'two', label: '曼哈顿距离' },
+              { value: 'three', label: '斜线距离' },
+            ]}
+          />
+        </div>
+        <canvas id="mainCanvas"></canvas>
       </div>
-      <canvas id="mainCanvas"></canvas>
     </div>
   );
 };
