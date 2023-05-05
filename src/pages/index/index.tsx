@@ -3,6 +3,15 @@ import * as PIXI from 'pixi.js';
 import styles from './index.module.less';
 import { createLine, translatePosition, routePlan } from '@/utils';
 
+export enum BgLayoutItemType {
+  empty = 0,
+  obstacle = 1,
+  start = 2,
+  end = 3,
+  route = 4,
+  round = 5,
+}
+
 const WIDTH = 700;
 const HEIGHT = 700;
 const GRIDROWS = 25;
@@ -29,7 +38,7 @@ const obstacleArr = [
   { x: 15, y: 24 },
 ];
 
-let obstacleAll: number[][] = [];
+let obstacleAll: BgLayoutItemType[][] = [];
 for (let i = 0; i < GRIDROWS; i++) {
   obstacleAll.push(new Array(25).fill(0));
 }
@@ -43,6 +52,7 @@ const Index = () => {
   const [app, setApp] = useState<PIXI.Application>();
   const bgContainer = useRef<PIXI.Container>(new PIXI.Container());
   const rectContainer = useRef<PIXI.Container>(new PIXI.Container());
+  const bgLayout = useRef<BgLayoutItemType[][]>(obstacleAll);
   const [startRect, setStartRect] = useState<{ x: number; y: number }>({
     x: 3,
     y: 5,
@@ -69,6 +79,8 @@ const Index = () => {
     if (!app) {
       return;
     }
+    bgLayout.current[startRect.y][startRect.x] = BgLayoutItemType.start;
+    bgLayout.current[endRect.y][endRect.x] = BgLayoutItemType.end;
     initLine();
     drawStartEnd();
     drawRoute();
@@ -125,21 +137,32 @@ const Index = () => {
     const routeList = routePlan({
       start: startRect,
       end: endRect,
-      obstacleAll,
+      obstacleAll: bgLayout.current,
     });
-    routeList.forEach((item, index) => {
+    routeList.forEach((routeRowList, index) => {
       setTimeout(() => {
-        createRect({
-          position: translatePosition({
-            width: WIDTH,
-            height: HEIGHT,
-            itemRows: GRIDROWS,
-            rows: item.y,
-            columns: item.x,
-          }),
-          color: 0xff4400,
+        routeRowList.forEach((item) => {
+          if (bgLayout.current[item.y][item.x] !== BgLayoutItemType.empty) {
+            return;
+          }
+
+          createRect({
+            position: translatePosition({
+              width: WIDTH,
+              height: HEIGHT,
+              itemRows: GRIDROWS,
+              rows: item.y,
+              columns: item.x,
+            }),
+            color: item.type === 'route' ? 0xff4400 : 0x6dffd6,
+          });
+          if (item.type === 'route') {
+            bgLayout.current[item.y][item.x] = BgLayoutItemType.route;
+          } else {
+            bgLayout.current[item.y][item.x] = BgLayoutItemType.round;
+          }
         });
-      }, 200 * index);
+      }, 500 * index);
     });
   };
 
@@ -190,6 +213,7 @@ const Index = () => {
   }) => {
     const { x, y } = position;
     let rectangle = new PIXI.Graphics();
+    rectangle.lineStyle(1, 0x000000, 1);
     rectangle.beginFill(color);
     rectangle.drawRect(
       x - (x % GRIDWIDTH),

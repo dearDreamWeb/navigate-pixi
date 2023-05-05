@@ -1,4 +1,5 @@
 import { Graphics, Application } from 'pixi.js';
+import { BgLayoutItemType } from '@/pages/index';
 
 interface CreateLine {
   moveToX: number;
@@ -32,6 +33,7 @@ interface NexStepReturn extends Position {
   gValue: number;
   hValue: number;
   value: number;
+  type: 'route' | 'round';
 }
 
 export const createLine = ({
@@ -78,7 +80,7 @@ const nexStep = ({
   start,
   end,
   obstacleAll,
-}: RoutePlanProps): NexStepReturn => {
+}: RoutePlanProps): NexStepReturn[] => {
   const { x: startX, y: startY } = start;
   const { x: endX, y: endY } = end;
   const direction: any = {
@@ -91,18 +93,19 @@ const nexStep = ({
     left: { x: startX - 1, y: startY, gValue: 1 },
     right: { x: startX + 1, y: startY, gValue: 1 },
   };
-  let arr = [];
+  let arr: NexStepReturn[] = [];
   for (let key in direction) {
     const { x, y, gValue } = direction[key];
-    if (x < 0 || y < 0 || obstacleAll[y][x]) {
+    if (x < 0 || y < 0 || obstacleAll[y][x] === BgLayoutItemType.obstacle) {
       continue;
     }
     let hValue = Math.sqrt(
       Math.pow(Math.abs(endX - x), 2) + Math.pow(Math.abs(endY - y), 2)
     );
-    arr.push({ x, y, gValue, hValue, value: gValue + hValue });
+    arr.push({ x, y, gValue, hValue, value: gValue + hValue, type: 'round' });
   }
   arr = arr.sort((a, b) => a.value - b.value);
+  arr[0].type = 'route';
   let result = arr[0];
   for (let i = 0; i < arr.length; i++) {
     if (
@@ -111,9 +114,15 @@ const nexStep = ({
       arr[i].gValue < result.gValue
     ) {
       result = arr[i];
+      arr[i].type = 'route';
     }
   }
-  return result;
+  arr.forEach((item, i) => {
+    if (arr[i].x !== result.x || arr[i].y !== result.y) {
+      arr[i].type = 'round';
+    }
+  });
+  return arr;
 };
 
 /**
@@ -122,14 +131,21 @@ const nexStep = ({
  * @returns
  */
 export const routePlan = ({ start, end, obstacleAll }: RoutePlanProps) => {
-  let arr: Position[] = [];
-  function loop({ start, end, obstacleAll }: RoutePlanProps): Position[] {
-    let nextPosition = nexStep({ start, end, obstacleAll });
+  let arr: NexStepReturn[][] = [[]];
+  function loop({
+    start,
+    end,
+    obstacleAll,
+  }: RoutePlanProps): NexStepReturn[][] {
+    let nextPositionArr = nexStep({ start, end, obstacleAll });
+    let nextPosition = nextPositionArr.filter(
+      (item) => item.type === 'route'
+    )[0];
     if (nextPosition.x === end.x && nextPosition.y === end.y) {
       return arr;
     }
     let position = { x: nextPosition.x, y: nextPosition.y };
-    arr.push(position);
+    arr.push(nextPositionArr);
     return loop({ start: position, end, obstacleAll });
   }
 
