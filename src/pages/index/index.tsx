@@ -1,7 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import * as PIXI from 'pixi.js';
 import styles from './index.module.less';
-import { createLine, translatePosition, routePlan } from '@/utils';
+import {
+  createLine,
+  translatePosition,
+  routePlan,
+  clickPosition,
+} from '@/utils';
 
 export enum BgLayoutItemType {
   empty = 0,
@@ -10,6 +15,10 @@ export enum BgLayoutItemType {
   end = 3,
   route = 4,
   round = 5,
+}
+
+interface RectGraphics extends PIXI.Graphics {
+  rectType: BgLayoutItemType;
 }
 
 const WIDTH = 700;
@@ -50,9 +59,13 @@ console.log(obstacleAll);
 
 const Index = () => {
   const [app, setApp] = useState<PIXI.Application>();
+  // 背景条纹容器
   const bgContainer = useRef<PIXI.Container>(new PIXI.Container());
+  // 方格容器
   const rectContainer = useRef<PIXI.Container>(new PIXI.Container());
+  // 二维数组
   const bgLayout = useRef<BgLayoutItemType[][]>(obstacleAll);
+  const [isStart, setIsStart] = useState(false);
   const [startRect, setStartRect] = useState<{ x: number; y: number }>({
     x: 3,
     y: 5,
@@ -83,9 +96,15 @@ const Index = () => {
     bgLayout.current[endRect.y][endRect.x] = BgLayoutItemType.end;
     initLine();
     drawStartEnd();
-    drawRoute();
     drawObstacleArr();
   }, [app]);
+
+  useEffect(() => {
+    if (!isStart) {
+      return;
+    }
+    drawRoute();
+  }, [isStart]);
 
   /**
    * 绘制起点和终点
@@ -99,6 +118,7 @@ const Index = () => {
         rows: startRect.y,
         columns: startRect.x,
       }),
+      type: BgLayoutItemType.start,
     });
     createRect({
       position: translatePosition({
@@ -109,6 +129,7 @@ const Index = () => {
         columns: endRect.x,
       }),
       color: 0xe4393c,
+      type: BgLayoutItemType.end,
     });
   };
 
@@ -126,6 +147,7 @@ const Index = () => {
           columns: item.x,
         }),
         color: 0xcccccc,
+        type: BgLayoutItemType.obstacle,
       });
     });
   };
@@ -139,10 +161,17 @@ const Index = () => {
       end: endRect,
       obstacleAll: bgLayout.current,
     });
+    console.log(`总共步数：${routeList.length}`);
+    let prohibitDraw = [
+      BgLayoutItemType.start,
+      BgLayoutItemType.end,
+      BgLayoutItemType.obstacle,
+      BgLayoutItemType.route,
+    ];
     routeList.forEach((routeRowList, index) => {
       setTimeout(() => {
         routeRowList.forEach((item) => {
-          if (bgLayout.current[item.y][item.x] !== BgLayoutItemType.empty) {
+          if (prohibitDraw.includes(bgLayout.current[item.y][item.x])) {
             return;
           }
 
@@ -155,6 +184,10 @@ const Index = () => {
               columns: item.x,
             }),
             color: item.type === 'route' ? 0xff4400 : 0x6dffd6,
+            type:
+              item.type === 'route'
+                ? BgLayoutItemType.route
+                : BgLayoutItemType.round,
           });
           if (item.type === 'route') {
             bgLayout.current[item.y][item.x] = BgLayoutItemType.route;
@@ -190,14 +223,25 @@ const Index = () => {
     }
     bgContainer.current = container;
     app!.stage.addChild(container);
-    // app!.renderer.plugins.interaction.on(
-    //   'pointerdown',
-    //   (event: PIXI.InteractionEvent) => {
-    //     let position = event.data.getLocalPosition(bgContainer.current!);
-    //     console.log(position);
-    //     createRect(position);
-    //   }
-    // );
+    app!.renderer.plugins.interaction.on(
+      'pointerdown',
+      (event: PIXI.InteractionEvent) => {
+        let position = event.data.getLocalPosition(bgContainer.current!);
+        const { x, y, relativeX, relativeY } = clickPosition({
+          width: WIDTH,
+          height: HEIGHT,
+          itemRows: GRIDROWS,
+          y: position.y,
+          x: position.x,
+        });
+        createRect({
+          position: { x, y },
+          color: 0xcccccc,
+          type: BgLayoutItemType.obstacle,
+        });
+        bgLayout.current[relativeY][relativeX] = BgLayoutItemType.obstacle;
+      }
+    );
   };
 
   /**
@@ -207,12 +251,14 @@ const Index = () => {
   const createRect = ({
     position,
     color = 0x000000,
+    type = BgLayoutItemType.obstacle,
   }: {
     position: { x: number; y: number };
     color?: number;
+    type?: BgLayoutItemType;
   }) => {
     const { x, y } = position;
-    let rectangle = new PIXI.Graphics();
+    let rectangle = new PIXI.Graphics() as RectGraphics;
     rectangle.lineStyle(1, 0x000000, 1);
     rectangle.beginFill(color);
     rectangle.drawRect(
@@ -222,12 +268,20 @@ const Index = () => {
       GRIDHEIGHT
     );
     rectangle.endFill();
+    rectangle.rectType = type;
     rectContainer.current?.addChild(rectangle);
     app?.stage.addChild(rectContainer.current!);
   };
 
+  const playStart = () => {
+    setIsStart(true);
+  };
+
   return (
     <div className={(styles as any).indexMain}>
+      <div>
+        <button onClick={playStart}>开始</button>
+      </div>
       <canvas id="mainCanvas"></canvas>
     </div>
   );

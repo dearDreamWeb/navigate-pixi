@@ -18,6 +18,12 @@ interface TranslatePositionProps {
   columns: number;
 }
 
+interface ClickPositionProps extends Position {
+  width: number;
+  height: number;
+  itemRows: number;
+}
+
 interface Position {
   x: number;
   y: number;
@@ -26,7 +32,8 @@ interface Position {
 interface RoutePlanProps {
   start: Position;
   end: Position;
-  obstacleAll: number[][];
+  centerPosition: Position;
+  obstacleAll: BgLayoutItemType[][];
 }
 
 interface NexStepReturn extends Position {
@@ -69,6 +76,26 @@ export const translatePosition = ({
 };
 
 /**
+ * 点击事件转换坐标
+ */
+export const clickPosition = ({
+  width,
+  height,
+  itemRows,
+  x,
+  y,
+}: ClickPositionProps) => {
+  const itemWidth = width / itemRows;
+  const columns = Math.floor(x / itemWidth);
+  const rows = Math.floor(y / itemWidth);
+  return {
+    ...translatePosition({ width, height, itemRows, rows, columns }),
+    relativeX: columns,
+    relativeY: rows,
+  };
+};
+
+/**
  * 计算出下一步
  * f(n) = g(n) + h(n)，取f(n)最小值
  * g(n) 指的是从起始格子到格子n的实际代价，而 h(n) 指的是从格子n到终点格子的估计代价。
@@ -79,30 +106,53 @@ export const translatePosition = ({
 const nexStep = ({
   start,
   end,
+  centerPosition,
   obstacleAll,
 }: RoutePlanProps): NexStepReturn[] => {
   const { x: startX, y: startY } = start;
   const { x: endX, y: endY } = end;
+  const { x: centerX, y: centerY } = centerPosition;
   const direction: any = {
-    topLeft: { x: startX - 1, y: startY - 1, gValue: Math.sqrt(2) },
-    topRight: { x: startX + 1, y: startY - 1, gValue: Math.sqrt(2) },
-    bottomLeft: { x: startX - 1, y: startY + 1, gValue: Math.sqrt(2) },
-    bottomRight: { x: startX + 1, y: startY + 1, gValue: Math.sqrt(2) },
-    top: { x: startX, y: startY - 1, gValue: 1 },
-    bottom: { x: startX, y: startY + 1, gValue: 1 },
-    left: { x: startX - 1, y: startY, gValue: 1 },
-    right: { x: startX + 1, y: startY, gValue: 1 },
+    topLeft: { x: centerX - 1, y: centerY - 1 },
+    topRight: { x: centerX + 1, y: centerY - 1 },
+    bottomLeft: { x: centerX - 1, y: centerY + 1 },
+    bottomRight: { x: centerX + 1, y: centerY + 1 },
+    top: { x: centerX, y: centerY - 1 },
+    bottom: { x: centerX, y: centerY + 1 },
+    left: { x: centerX - 1, y: centerY },
+    right: { x: centerX + 1, y: centerY },
   };
   let arr: NexStepReturn[] = [];
   for (let key in direction) {
-    const { x, y, gValue } = direction[key];
-    if (x < 0 || y < 0 || obstacleAll[y][x] === BgLayoutItemType.obstacle) {
+    const { x, y } = direction[key];
+    if (
+      x < 0 ||
+      y < 0 ||
+      obstacleAll[y][x] === BgLayoutItemType.obstacle ||
+      obstacleAll[y][x] === BgLayoutItemType.route
+    ) {
       continue;
     }
-    let hValue = Math.sqrt(
-      Math.pow(Math.abs(endX - x), 2) + Math.pow(Math.abs(endY - y), 2)
-    );
+
+    let gValue = Math.sqrt(Math.pow(startX - x, 2) + Math.pow(startY - y, 2));
+
+    // 对角线距离
+    let max = Math.max(Math.abs(endX - x), Math.abs(endY - y));
+    let min = Math.min(Math.abs(endX - x), Math.abs(endY - y));
+    let hValue = Math.sqrt(Math.pow(min, 2) + Math.pow(min, 2)) + max - min;
+
+    // 曼哈顿距离
+    // let hValue = Math.abs(endX - x) + Math.abs(endY - y);
+
+    // 斜线距离
+    // let hValue = Math.sqrt(
+    //   Math.pow(Math.abs(endX - x), 2) + Math.pow(Math.abs(endY - y), 2)
+    // );
+
     arr.push({ x, y, gValue, hValue, value: gValue + hValue, type: 'round' });
+  }
+  if (!arr.length) {
+    return arr;
   }
   arr = arr.sort((a, b) => a.value - b.value);
   arr[0].type = 'route';
@@ -130,24 +180,41 @@ const nexStep = ({
  * @param param0
  * @returns
  */
-export const routePlan = ({ start, end, obstacleAll }: RoutePlanProps) => {
+export const routePlan = ({
+  start,
+  end,
+  obstacleAll,
+}: Omit<RoutePlanProps, 'centerPosition'>) => {
   let arr: NexStepReturn[][] = [[]];
+  const bgLayout = JSON.parse(JSON.stringify(obstacleAll));
+  let centerPosition = start;
   function loop({
     start,
     end,
     obstacleAll,
+    centerPosition,
   }: RoutePlanProps): NexStepReturn[][] {
-    let nextPositionArr = nexStep({ start, end, obstacleAll });
+    let nextPositionArr = nexStep({ start, end, centerPosition, obstacleAll });
+    if (!nextPositionArr.length) {
+      alert('不好意思，走不通呀！！！');
+      return arr;
+    }
     let nextPosition = nextPositionArr.filter(
       (item) => item.type === 'route'
     )[0];
     if (nextPosition.x === end.x && nextPosition.y === end.y) {
       return arr;
     }
+    obstacleAll[nextPosition.y][nextPosition.x] = BgLayoutItemType.route;
     let position = { x: nextPosition.x, y: nextPosition.y };
     arr.push(nextPositionArr);
-    return loop({ start: position, end, obstacleAll });
+    return loop({
+      start: position,
+      end,
+      centerPosition: nextPosition,
+      obstacleAll,
+    });
   }
 
-  return loop({ start, end, obstacleAll });
+  return loop({ start, end, centerPosition, obstacleAll: bgLayout });
 };
