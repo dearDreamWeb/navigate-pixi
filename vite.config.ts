@@ -2,7 +2,6 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import eslintPlugin from 'vite-plugin-eslint'; // 引入
 import path from 'path';
-// import vitePluginCssModule from 'vite-plugin-style-modules/dist/bundle';
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -13,7 +12,6 @@ export default defineConfig({
       cache: false,
       include: './src',
     }),
-    // vitePluginCssModule(),
   ],
   base: './',
   server: {
