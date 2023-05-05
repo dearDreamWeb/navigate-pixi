@@ -125,6 +125,7 @@ const nexStep = ({
     right: { x: centerX + 1, y: centerY },
   };
   let arr: NexStepReturn[] = [];
+
   for (let key in direction) {
     const { x, y } = direction[key];
     if (
@@ -221,7 +222,7 @@ export const routePlan = ({
     if (nextPosition.x === end.x && nextPosition.y === end.y) {
       return arr;
     }
-    console.log(nextPosition, nextPositionArr);
+    // console.log(nextPosition, nextPositionArr);
     obstacleAll[nextPosition.y][nextPosition.x] = BgLayoutItemType.route;
     let position = { x: nextPosition.x, y: nextPosition.y };
     arr.push(nextPositionArr);

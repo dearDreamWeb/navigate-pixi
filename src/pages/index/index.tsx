@@ -7,7 +7,7 @@ import {
   routePlan,
   clickPosition,
 } from '@/utils';
-import { Button, Select } from 'antd';
+import { Button, Select, Tooltip } from 'antd';
 
 export enum BgLayoutItemType {
   empty = 0,
@@ -61,6 +61,7 @@ obstacleArr.forEach((item) => {
 
 const Index = () => {
   const [app, setApp] = useState<PIXI.Application>();
+  const isAddObstacle = useRef(true);
   // 背景条纹容器
   const bgContainer = useRef<PIXI.Container>(new PIXI.Container());
   // 方格容器
@@ -162,6 +163,7 @@ const Index = () => {
    * 绘制路径
    */
   const drawRoute = () => {
+    isAddObstacle.current = false;
     const routeList = routePlan({
       start: startRect,
       end: endRect,
@@ -190,7 +192,7 @@ const Index = () => {
               rows: item.y,
               columns: item.x,
             }),
-            color: item.type === 'route' ? 0xff4400 : 0x6dffd6,
+            color: item.type === 'route' ? 0xf6f61f : 0x6dffd6,
             type:
               item.type === 'route'
                 ? BgLayoutItemType.route
@@ -235,6 +237,9 @@ const Index = () => {
     app!.renderer.plugins.interaction.on(
       'pointerdown',
       (event: PIXI.InteractionEvent) => {
+        if (!isAddObstacle.current) {
+          return;
+        }
         let position = event.data.getLocalPosition(bgContainer.current!);
         const { x, y, relativeX, relativeY } = clickPosition({
           width: WIDTH,
@@ -256,6 +261,12 @@ const Index = () => {
           rectContainer.current.removeChild(filterArr[0]);
           bgLayout.current[relativeY][relativeX] = BgLayoutItemType.empty;
         } else {
+          if (
+            (relativeX === startRect.x && relativeY === startRect.y) ||
+            (relativeX === endRect.x && relativeY === endRect.y)
+          ) {
+            return;
+          }
           createRect({
             position: { x, y },
             color: 0xcccccc,
@@ -321,6 +332,7 @@ const Index = () => {
       ...routeRoundContainer.current.children
     );
     app?.stage.removeChild(routeRoundContainer.current);
+    isAddObstacle.current = true;
   };
 
   const handleChange = (value: string) => {
@@ -328,9 +340,9 @@ const Index = () => {
   };
 
   return (
-    <div className={(styles as any).indexMain}>
-      <div>
-        <div>
+    <div className={styles.indexMain}>
+      <div className={styles.main}>
+        <div className={styles.topBox}>
           <Button onClick={playStart}>开始</Button>
           <Button onClick={clearRoute}>清除路径</Button>
           <Select
@@ -343,6 +355,12 @@ const Index = () => {
               { value: 'three', label: '斜线距离' },
             ]}
           />
+          <Tooltip
+            placement="right"
+            title="点击屏幕的区域可以绘制障碍物，再次点击障碍物会消除障碍物，请先清除路径之后添加或删除障碍物"
+          >
+            规则说明
+          </Tooltip>
         </div>
         <canvas id="mainCanvas"></canvas>
       </div>
