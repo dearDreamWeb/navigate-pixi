@@ -5,6 +5,7 @@ import {
   createLine,
   translatePosition,
   routePlan,
+  routePlanDijkstra,
   clickPosition,
 } from '@/utils';
 import { Button, Select, Tooltip } from 'antd';
@@ -70,8 +71,11 @@ const Index = () => {
   const routeRoundContainer = useRef<PIXI.Container>(new PIXI.Container());
   // 二维数组
   const bgLayout = useRef<BgLayoutItemType[][]>(obstacleAll);
+  // 寻路模式，A*寻路和Dijkstra寻路
+  const [routeType, setRouteType] = useState<'aStar' | 'dijkstra'>('aStar');
   const [isStart, setIsStart] = useState(false);
   const [selectType, setSelectType] = useState('one');
+  const [step, setStep] = useState(0);
   const [startRect, setStartRect] = useState<{ x: number; y: number }>({
     x: 3,
     y: 5,
@@ -80,6 +84,7 @@ const Index = () => {
     x: 20,
     y: 22,
   });
+  const timer = useRef<NodeJS.Timeout[]>([]);
 
   useEffect(() => {
     let _app = new PIXI.Application({
@@ -164,48 +169,81 @@ const Index = () => {
    */
   const drawRoute = () => {
     isAddObstacle.current = false;
-    const routeList = routePlan({
-      start: startRect,
-      end: endRect,
-      obstacleAll: bgLayout.current,
-      plan: selectType,
-    });
-    console.log(`总共步数：${routeList.length}`);
-    let prohibitDraw = [
-      BgLayoutItemType.start,
-      BgLayoutItemType.end,
-      BgLayoutItemType.obstacle,
-      BgLayoutItemType.route,
-    ];
-    routeList.forEach((routeRowList, index) => {
-      setTimeout(() => {
-        routeRowList.forEach((item) => {
-          if (prohibitDraw.includes(bgLayout.current[item.y][item.x])) {
-            return;
-          }
+    if (routeType === 'dijkstra') {
+      const list: any = routePlanDijkstra({
+        start: startRect,
+        end: endRect,
+        obstacleAll: bgLayout.current,
+        plan: selectType,
+      });
 
+      if (!list.length) {
+        alert('不好意思，走不通呀！！！');
+        return;
+      }
+      setStep(list.length);
+      list.forEach((item: any, index: number) => {
+        const _timer = setTimeout(() => {
           createRect({
             position: translatePosition({
               width: WIDTH,
               height: HEIGHT,
               itemRows: GRIDROWS,
-              rows: item.y,
-              columns: item.x,
+              rows: item[1],
+              columns: item[0],
             }),
-            color: item.type === 'route' ? 0xf6f61f : 0x6dffd6,
-            type:
-              item.type === 'route'
-                ? BgLayoutItemType.route
-                : BgLayoutItemType.round,
+            color: 0xf6f61f,
+            type: BgLayoutItemType.route,
           });
-          if (item.type === 'route') {
-            bgLayout.current[item.y][item.x] = BgLayoutItemType.route;
-          } else {
-            bgLayout.current[item.y][item.x] = BgLayoutItemType.round;
-          }
-        });
-      }, 200 * index);
-    });
+          bgLayout.current[item[1]][item[0]] = BgLayoutItemType.route;
+        }, 200 * index);
+        timer.current.push(_timer);
+      });
+    } else {
+      const routeList = routePlan({
+        start: startRect,
+        end: endRect,
+        obstacleAll: bgLayout.current,
+        plan: selectType,
+      });
+      setStep(routeList.length);
+      let prohibitDraw = [
+        BgLayoutItemType.start,
+        BgLayoutItemType.end,
+        BgLayoutItemType.obstacle,
+        BgLayoutItemType.route,
+      ];
+      routeList.forEach((routeRowList, index) => {
+        const _timer = setTimeout(() => {
+          routeRowList.forEach((item) => {
+            if (prohibitDraw.includes(bgLayout.current[item.y][item.x])) {
+              return;
+            }
+
+            createRect({
+              position: translatePosition({
+                width: WIDTH,
+                height: HEIGHT,
+                itemRows: GRIDROWS,
+                rows: item.y,
+                columns: item.x,
+              }),
+              color: item.type === 'route' ? 0xf6f61f : 0x6dffd6,
+              type:
+                item.type === 'route'
+                  ? BgLayoutItemType.route
+                  : BgLayoutItemType.round,
+            });
+            if (item.type === 'route') {
+              bgLayout.current[item.y][item.x] = BgLayoutItemType.route;
+            } else {
+              bgLayout.current[item.y][item.x] = BgLayoutItemType.round;
+            }
+          });
+        }, 200 * index);
+        timer.current.push(_timer);
+      });
+    }
   };
 
   /**
@@ -323,6 +361,8 @@ const Index = () => {
    * 清除路径
    */
   const clearRoute = () => {
+    timer.current.forEach((timerItem) => clearTimeout(timerItem));
+    timer.current = [];
     routeRoundContainer.current.children.forEach((item) => {
       bgLayout.current[Math.floor((item as RectGraphics).paramY / GRIDHEIGHT)][
         Math.floor((item as RectGraphics).paramX / GRIDWIDTH)
@@ -343,18 +383,35 @@ const Index = () => {
     <div className={styles.indexMain}>
       <div className={styles.main}>
         <div className={styles.topBox}>
+          <div>
+            寻路模式：
+            <Select
+              defaultValue={routeType}
+              style={{ width: 120 }}
+              onChange={(value) => setRouteType(value)}
+              options={[
+                { value: 'aStar', label: 'A*寻路算法' },
+                { value: 'dijkstra', label: 'Dijkstra寻路算法' },
+              ]}
+            />
+          </div>
           <Button onClick={playStart}>开始</Button>
           <Button onClick={clearRoute}>清除路径</Button>
-          <Select
-            defaultValue={selectType}
-            style={{ width: 120 }}
-            onChange={handleChange}
-            options={[
-              { value: 'one', label: '对角线距离' },
-              { value: 'two', label: '曼哈顿距离' },
-              { value: 'three', label: '斜线距离' },
-            ]}
-          />
+          {routeType === 'aStar' && (
+            <Select
+              defaultValue={selectType}
+              style={{ width: 120 }}
+              onChange={handleChange}
+              options={[
+                { value: 'one', label: '对角线距离' },
+                { value: 'two', label: '曼哈顿距离' },
+                { value: 'three', label: '斜线距离' },
+              ]}
+            />
+          )}
+          <div>
+            总共步数：<b className={styles.stepValue}>{step || 0}</b>
+          </div>
           <Tooltip
             placement="right"
             title="点击屏幕的区域可以绘制障碍物，再次点击障碍物会消除障碍物，请先清除路径之后添加或删除障碍物"
