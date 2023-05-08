@@ -1,5 +1,6 @@
 import { Graphics, Application } from 'pixi.js';
 import { BgLayoutItemType } from '@/pages/index';
+import { message } from 'antd';
 
 interface CreateLine {
   moveToX: number;
@@ -213,7 +214,7 @@ export const routePlan = ({
       plan,
     });
     if (!nextPositionArr.length) {
-      alert('不好意思，走不通呀！！！');
+      message.info('不好意思，走不通呀！！！');
       return arr;
     }
     let nextPosition = nextPositionArr.filter(
@@ -239,6 +240,7 @@ export const routePlan = ({
 
 /**
  * Dijkstra算法
+ * 广度搜索算法
  * @param param0
  * @returns
  */
@@ -337,4 +339,5 @@ export const routePlanDijkstra = ({
       }
     }
   }
+  return [];
 };

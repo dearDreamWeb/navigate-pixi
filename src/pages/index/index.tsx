@@ -1,3 +1,4 @@
+/* eslint-disable no-case-declarations */
 import { useState, useEffect, useRef } from 'react';
 import * as PIXI from 'pixi.js';
 import styles from './index.module.less';
@@ -8,7 +9,7 @@ import {
   routePlanDijkstra,
   clickPosition,
 } from '@/utils';
-import { Button, Select, Tooltip } from 'antd';
+import { Button, Select, Tooltip, message } from 'antd';
 
 export enum BgLayoutItemType {
   empty = 0,
@@ -72,10 +73,13 @@ const Index = () => {
   // 二维数组
   const bgLayout = useRef<BgLayoutItemType[][]>(obstacleAll);
   // 寻路模式，A*寻路和Dijkstra寻路
-  const [routeType, setRouteType] = useState<'aStar' | 'dijkstra'>('aStar');
+  const [routeType, setRouteType] = useState<'aStar' | 'dijkstra'>('dijkstra');
   const [isStart, setIsStart] = useState(false);
   const [selectType, setSelectType] = useState('one');
   const [step, setStep] = useState(0);
+  const [clickStatus, setClickStatus] = useState<'obstacle' | 'start' | 'end'>(
+    'obstacle'
+  );
   const [startRect, setStartRect] = useState<{ x: number; y: number }>({
     x: 3,
     y: 5,
@@ -109,6 +113,101 @@ const Index = () => {
     drawStartEnd();
     drawObstacleArr();
   }, [app]);
+
+  useEffect(() => {
+    if (!app) {
+      return;
+    }
+    appEventClick();
+  }, [app, clickStatus]);
+
+  const appEventClick = () => {
+    app!.renderer.plugins.interaction.removeAllListeners();
+    // 点击事件生成障碍物，再次点击障碍物将障碍物消掉，也可以生成开始点和结束点
+    app!.renderer.plugins.interaction.on(
+      'pointerdown',
+      (event: PIXI.InteractionEvent) => {
+        if (!isAddObstacle.current) {
+          return;
+        }
+        let position = event.data.getLocalPosition(bgContainer.current!);
+        const { x, y, relativeX, relativeY } = clickPosition({
+          width: WIDTH,
+          height: HEIGHT,
+          itemRows: GRIDROWS,
+          y: position.y,
+          x: position.x,
+        });
+        console.log('clickStatus', clickStatus);
+        switch (clickStatus) {
+          case 'obstacle':
+            const filterArr = rectContainer.current.children.filter(
+              (item) =>
+                (item as RectGraphics).rectType === BgLayoutItemType.start &&
+                Math.floor((item as RectGraphics).paramX / GRIDWIDTH) ===
+                  relativeX &&
+                Math.floor((item as RectGraphics).paramY / GRIDHEIGHT) ===
+                  relativeY
+            );
+
+            if (filterArr.length) {
+              rectContainer.current.removeChild(filterArr[0]);
+              bgLayout.current[relativeY][relativeX] = BgLayoutItemType.empty;
+            } else {
+              if (
+                (relativeX === startRect.x && relativeY === startRect.y) ||
+                (relativeX === endRect.x && relativeY === endRect.y)
+              ) {
+                return;
+              }
+              createRect({
+                position: { x, y },
+                color: 0xcccccc,
+                type: BgLayoutItemType.obstacle,
+              });
+              bgLayout.current[relativeY][relativeX] =
+                BgLayoutItemType.obstacle;
+            }
+            break;
+          case 'start':
+            if (relativeX === endRect.x && relativeY === endRect.y) {
+              return;
+            }
+            const filterArr1 = rectContainer.current.children.filter(
+              (item) =>
+                (item as RectGraphics).rectType === BgLayoutItemType.start
+            );
+            rectContainer.current.removeChild(filterArr1[0]);
+            bgLayout.current[relativeY][relativeX] = BgLayoutItemType.empty;
+
+            createRect({
+              position: { x, y },
+              type: BgLayoutItemType.start,
+            });
+            setStartRect({ x: relativeX, y: relativeY });
+            bgLayout.current[relativeY][relativeX] = BgLayoutItemType.start;
+            break;
+          case 'end':
+            if (relativeX === startRect.x && relativeY === startRect.y) {
+              return;
+            }
+            const filterArr2 = rectContainer.current.children.filter(
+              (item) => (item as RectGraphics).rectType === BgLayoutItemType.end
+            );
+            rectContainer.current.removeChild(filterArr2[0]);
+            bgLayout.current[relativeY][relativeX] = BgLayoutItemType.empty;
+            createRect({
+              position: { x, y },
+              color: 0xe4393c,
+              type: BgLayoutItemType.end,
+            });
+            setEndRect({ x: relativeX, y: relativeY });
+            bgLayout.current[relativeY][relativeX] = BgLayoutItemType.end;
+            break;
+        }
+      }
+    );
+  };
 
   useEffect(() => {
     if (!isStart) {
@@ -168,6 +267,7 @@ const Index = () => {
    * 绘制路径
    */
   const drawRoute = () => {
+    console.log(startRect, bgLayout.current);
     isAddObstacle.current = false;
     if (routeType === 'dijkstra') {
       const list: any = routePlanDijkstra({
@@ -178,7 +278,7 @@ const Index = () => {
       });
 
       if (!list.length) {
-        alert('不好意思，走不通呀！！！');
+        message.info('不好意思，走不通呀！！！');
         return;
       }
       setStep(list.length);
@@ -250,6 +350,8 @@ const Index = () => {
    * 初始化网格
    */
   const initLine = () => {
+    app?.stage.removeChild(bgContainer.current);
+    bgContainer.current = new PIXI.Container();
     const container = new PIXI.Container();
 
     for (let i = 0; i < GRIDROWS + 1; i++) {
@@ -270,50 +372,6 @@ const Index = () => {
     }
     bgContainer.current = container;
     app!.stage.addChild(container);
-
-    // 点击事件生成障碍物，再次点击障碍物将障碍物消掉
-    app!.renderer.plugins.interaction.on(
-      'pointerdown',
-      (event: PIXI.InteractionEvent) => {
-        if (!isAddObstacle.current) {
-          return;
-        }
-        let position = event.data.getLocalPosition(bgContainer.current!);
-        const { x, y, relativeX, relativeY } = clickPosition({
-          width: WIDTH,
-          height: HEIGHT,
-          itemRows: GRIDROWS,
-          y: position.y,
-          x: position.x,
-        });
-
-        const filterArr = rectContainer.current.children.filter(
-          (item) =>
-            (item as RectGraphics).rectType === BgLayoutItemType.obstacle &&
-            Math.floor((item as RectGraphics).paramX / GRIDWIDTH) ===
-              relativeX &&
-            Math.floor((item as RectGraphics).paramY / GRIDHEIGHT) === relativeY
-        );
-
-        if (filterArr.length) {
-          rectContainer.current.removeChild(filterArr[0]);
-          bgLayout.current[relativeY][relativeX] = BgLayoutItemType.empty;
-        } else {
-          if (
-            (relativeX === startRect.x && relativeY === startRect.y) ||
-            (relativeX === endRect.x && relativeY === endRect.y)
-          ) {
-            return;
-          }
-          createRect({
-            position: { x, y },
-            color: 0xcccccc,
-            type: BgLayoutItemType.obstacle,
-          });
-          bgLayout.current[relativeY][relativeX] = BgLayoutItemType.obstacle;
-        }
-      }
-    );
   };
 
   /**
@@ -361,6 +419,7 @@ const Index = () => {
    * 清除路径
    */
   const clearRoute = () => {
+    setClickStatus('obstacle');
     timer.current.forEach((timerItem) => clearTimeout(timerItem));
     timer.current = [];
     routeRoundContainer.current.children.forEach((item) => {
@@ -379,46 +438,72 @@ const Index = () => {
     setSelectType(value);
   };
 
+  const settingStart = () => {
+    setClickStatus((status) => (status === 'start' ? 'obstacle' : 'start'));
+  };
+
+  const settingEnd = () => {
+    setClickStatus((status) => (status === 'end' ? 'obstacle' : 'end'));
+  };
+
   return (
     <div className={styles.indexMain}>
-      <div className={styles.main}>
-        <div className={styles.topBox}>
-          <div>
-            寻路模式：
-            <Select
-              defaultValue={routeType}
-              style={{ width: 120 }}
-              onChange={(value) => setRouteType(value)}
-              options={[
-                { value: 'aStar', label: 'A*寻路算法' },
-                { value: 'dijkstra', label: 'Dijkstra寻路算法' },
-              ]}
-            />
-          </div>
-          <Button onClick={playStart}>开始</Button>
-          <Button onClick={clearRoute}>清除路径</Button>
-          {routeType === 'aStar' && (
-            <Select
-              defaultValue={selectType}
-              style={{ width: 120 }}
-              onChange={handleChange}
-              options={[
-                { value: 'one', label: '对角线距离' },
-                { value: 'two', label: '曼哈顿距离' },
-                { value: 'three', label: '斜线距离' },
-              ]}
-            />
-          )}
-          <div>
-            总共步数：<b className={styles.stepValue}>{step || 0}</b>
-          </div>
-          <Tooltip
-            placement="right"
-            title="点击屏幕的区域可以绘制障碍物，再次点击障碍物会消除障碍物，请先清除路径之后添加或删除障碍物"
-          >
-            规则说明
-          </Tooltip>
+      <div className={styles.topBox}>
+        <div>
+          寻路模式：
+          <Select
+            defaultValue={routeType}
+            style={{ width: 120 }}
+            onChange={(value) => setRouteType(value)}
+            options={[
+              { value: 'aStar', label: 'A*寻路算法' },
+              { value: 'dijkstra', label: 'Dijkstra寻路算法' },
+            ]}
+          />
         </div>
+        <Button onClick={playStart} className={styles.btn}>
+          开始
+        </Button>
+        <Button
+          onClick={settingStart}
+          type={clickStatus === 'start' ? 'primary' : 'default'}
+          className={styles.btn}
+        >
+          设置起始点
+        </Button>
+        <Button
+          onClick={settingEnd}
+          type={clickStatus === 'end' ? 'primary' : 'default'}
+          className={styles.btn}
+        >
+          设置结束点
+        </Button>
+        <Button onClick={clearRoute} className={styles.btn}>
+          清除路径
+        </Button>
+        {routeType === 'aStar' && (
+          <Select
+            defaultValue={selectType}
+            style={{ width: 120 }}
+            onChange={handleChange}
+            options={[
+              { value: 'one', label: '对角线距离' },
+              { value: 'two', label: '曼哈顿距离' },
+              { value: 'three', label: '斜线距离' },
+            ]}
+          />
+        )}
+        <div className={styles.stepBox}>
+          总共步数：<b className={styles.stepValue}>{step || 0}</b>
+        </div>
+        <Tooltip
+          placement="right"
+          title="点击屏幕的区域可以绘制障碍物，再次点击障碍物会消除障碍物，请先清除路径之后添加或删除障碍物"
+        >
+          规则说明
+        </Tooltip>
+      </div>
+      <div className={styles.main}>
         <canvas id="mainCanvas"></canvas>
       </div>
     </div>
