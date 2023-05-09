@@ -1,7 +1,7 @@
 # 项目简介
 
 实现两种寻路算法：`Dijkstra算法` 和 `A*自动寻路算法`。
-项目预览：[https://a-start-pixi.vercel.app](https://a-start-pixi.vercel.app)
+项目预览：[https://navigate-pixi.vercel.app](https://navigate-pixi.vercel.app)
 
 主要技术栈：
 
